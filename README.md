@@ -1,2 +1,12 @@
 # stick-figure-jump
 stick figure animation based on Guy Drut footage
+
+Editing:<br>
+1. Use arrow keys to change frames.<br>
+2. Drag nodes into position for a given frame.<br>
+3. Press any other key to print out node positions.<br>
+4. Copy/paste printed node positions to end of frameData array.<br>
+<br>
+<br>
+Viewing:<br>
+Comment out everything in the `draw()` function except `animateFigure(frameData);`
