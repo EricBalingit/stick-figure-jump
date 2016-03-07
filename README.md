@@ -10,6 +10,6 @@ stick figure animation based on Guy Drut footage
 5. Save the file.<br>
 6. Repeat at step 1 for the next frame.<br>
 <br>
-<br>
+
 ##Viewing:
 Comment out everything in the `draw()` function except `animateFigure(frameData);`
