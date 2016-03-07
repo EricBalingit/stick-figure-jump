@@ -1,0 +1,545 @@
+<html>
+	<head>
+	</head>
+	<body>
+		<canvas id="output-canvas"></canvas>
+		<script src="processing.1.4.8.js"></script>
+		<script>
+			function sketch(pjs){
+				pjs.pmouseX = pjs.mouseX = 0;
+				pjs.pmouseY = pjs.mouseY = 0;
+				with(pjs){ // makes it convenient to just call processing functions without pjs. prefix
+// this is arbitrary
+// the final size is normalized,
+// i.e. x and y values are between -0.5 and 0.5
+var headSize = 55;
+var headX = 200, headY = 100;
+
+// an array for all Button objects (drag handles)
+var uiControls = [];
+
+// the initial locations for each drag handle
+// (so they're not all bunched up on top of each other and we can see how they're connected)
+var pointData = [{x:223,y:29},{x:292,y:365},{x:274,y:373},{x:244,y:366},{x:252,y:264},{x:201,y:192},{x:162,y:273},{x:68,y:316},{x:71,y:346},{x:75,y:359},{x:207,y:128},{x:215,y:64},{x:201,y:139},{x:242,y:111},{x:250,y:99},{x:256,y:93},{x:252,y:100},{x:156,y:107},{x:205,y:131},{x:223,y:131},{x:229,y:137},{x:223,y:136}];
+
+
+// IMPORTANT! (shouldn't put anything here manually)
+// this is the bound point data for each drag handle
+// (gets initialized automatically from init -> createStickFigure -> new DragHandle(blah))
+// this is the object that gets printed to the screen when a key is pressed
+var points = [];
+
+
+// IMPORTANT! (shouldn't change this)
+// edge data probably won't change once it's established
+// (tells the program which indices into a pointData array to use to draw the sticks in the figure)
+var edges = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [5, 10], [10, 11], [11, 0], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [11, 17], [17, 18], [18, 19], [19, 20], [20, 21]];
+
+
+// the previous stick postions are stored here, but never used (not yet implemented)
+var pastFigures = [];
+
+// this is where all the pointData is stored for each frame
+// frameData must be generated (by moving the drag handles into position and pressing a key to print) then copied here
+// a frame looks like the pointData array (above) with different x/y values
+var frameData = [
+];
+
+// the background images (in order) that we use for each frame
+var bgImages = [];
+
+// the index of the current background image
+var bgImg = 0;
+
+frameRate(30);
+
+// sets the size of the canvas (we have to do this here, it's done automatically on KA)
+size(400, 400);
+
+draw = function() {
+    // important!  everything loads from init()
+    // see init() to get a better idea of where everything
+    // comes from
+    
+    if(!init.ready){
+        init();
+    }
+    
+    updateControls();
+    
+    drawOutput();
+
+    drawControls();
+    
+
+    //animateFigure(frameData);
+};
+
+function init(){
+    for(var i=6; i<69; i++){
+        bgImages.push(loadImage("Guy/guy" + i + ".png"));
+    }
+
+    createStickFigure();
+    
+    init.ready = true;
+};
+init.ready = false;
+
+keyPressed = function(){
+	if(keyCode === RIGHT){
+		bgImg = (bgImg + 1) % bgImages.length;
+	}else if(keyCode === LEFT){
+		bgImg--;
+		if(bgImg < 0){
+			bgImg += bgImages.length;
+		}
+	}else{
+		println(points);
+	}
+}
+
+mouseMoved = function(){
+    var x = mouseX, y = mouseY, control, controls = uiControls, i = controls.length;
+    while(i--){
+        control = controls[i];
+        control.mouseMoved(x, y);
+    }
+};
+
+mousePressed = function(){
+    var control, controls = uiControls, i = controls.length;
+    while(i--){
+        control = controls[i];
+        control.mousePressed();
+    }
+};
+
+mouseReleased = function(){
+    var control, controls = uiControls, i = controls.length;
+    while(i--){
+        control = controls[i];
+        control.mouseReleased();
+    }
+};
+
+function drawOutput(){
+	background(255);
+
+	var img = bgImages[bgImg];
+    var w = width, h = img.height * width / img.width;
+    image(img, 0, 0, w, h);
+
+	pushStyle();
+    textAlign(CENTER, CENTER);
+    stroke(0);
+    fill(255, 0, 0);
+    var edge, p1, p2;
+    for(var i=0; i<edges.length; i++){
+        edge = edges[i];
+        p1 = points[edge[0]];
+        p2 = points[edge[1]];
+        line(p1.x, p1.y, p2.x, p2.y);
+    }
+    for(var i=0; i<points.length; i++){
+        p1 = points[i];
+        text(i, p1.x, p1.y);
+    }
+    popStyle();
+};
+
+function animateFigure(animation){
+	var edge, p1, p2, f = animation[frameCount % animation.length];
+	background(255);
+	pushStyle();
+	stroke(0);
+	fill(255);
+	for(var i=0; i<edges.length; i++){
+		edge = edges[i];
+		p1 = f[edge[0]];
+		p2 = f[edge[1]];
+		line(p1.x, p1.y, p2.x, p2.y);
+	}
+	p1 = f[0];
+	ellipse(p1.x, p1.y, headSize, headSize);
+	popStyle();
+};
+
+function drawControls(){
+	var i = 0, l = uiControls.length;
+    for(var i=0; i<l; i++){
+        uiControls[i].draw();
+    }
+};
+
+var wasPressed = false;
+var mOver;
+function updateControls(){
+    var x = pjs.mouseX, y = pjs.mouseY,
+        moved = x !== pjs.pmouseX || y !== pjs.pmouseY,
+        pressed = !wasPressed && pjs.mouseIsPressed,
+        released = wasPressed && !pjs.mouseIsPressed,
+        trappedmOver = false;
+    
+    var control, controls = uiControls, i = controls.length;
+    if(moved){
+        while(i--){
+            control = controls[i];
+            control.mouseMoved(x, y);
+            if(control instanceof DragHandle){
+                if(control.mouseIsOver){
+                    if(!trappedmOver){
+                        if(mOver !== control){
+                            mOver = control;
+                            trappedmOver = true;
+                        }
+                    }else{
+                        control.mouseIsOver = false;
+                    }
+                }
+            }
+        }
+    }
+    i = controls.length;
+    while(i--){
+        control = controls[i];
+        if(pressed){
+            control.mousePressed();
+        }
+    }
+    i = controls.length;
+    while(i--){
+        control = controls[i];
+        if(released){
+            control.mouseReleased();
+        }
+    }
+    
+    wasPressed = pjs.mouseIsPressed;
+};
+
+function FigureData(scale, headRatio, points){
+    this.scale = scale;
+    this.headRatio = headRatio;
+    this.points = points;
+};
+
+FigureData.prototype.toString = function(){
+    return "{scale: " + this.scale + ",headRatio:" + this.headRatio + ",points:" + this.points + "}";
+};
+
+// lets just throw them up there a twiddle them into place
+function createStickFigure(){
+    var p;
+    
+    //new DragHandle({}, new Point(headX, headY));
+    for(var i=0; i<pointData.length; i++){
+        p = pointData[i];
+        new DragHandle({}, new Point(p.x, p.y));
+    }
+};
+
+function saveFigure(){
+    var maxX = -Infinity, minX = Infinity,
+        maxY = -Infinity, minY = Infinity,
+        p;
+    
+    // find centroid, min and max values
+    for(var i=0; i<points.length; i++){
+        p = points[i];
+        
+        // get min and max values
+        if(p.x < minX){
+            minX = p.x;
+        }
+        if(p.x > maxX){
+            maxX = p.x;
+        }
+        if(p.y < minY){
+            minY = p.y;
+        }
+        if(p.y > maxY){
+            maxY = p.y;
+        }
+    }
+    
+    var headOffsetRight = headX + 0.5 * headSize,
+        headOffsetLeft = headX - 0.5 * headSize,
+        headOffsetBottom = headY + 0.5 * headSize,
+        headOffsetTop = headY - 0.5 * headSize;
+    
+    if(maxX < headOffsetRight){
+        maxX = headOffsetRight;
+    }
+    
+    if(minX < headOffsetLeft){
+        minX = headOffsetLeft;
+    }
+    
+    if(maxY > headOffsetBottom){
+        maxY = headOffsetBottom;
+    }
+    
+    if(minY < headOffsetTop){
+        minY = headOffsetTop;
+    }
+    
+    var width = maxX - minX, height = maxY - minY;
+    var scale = Math.max(width, height), p;
+    
+    // normalize points
+    for(var i=0; i<points.length; i++){
+        p = points[i];
+        p.sub(headX, headY);
+        p.mult(1 / scale);
+    }
+    
+    // save to past figures array
+    pastFigures.push(new FigureData(scale, headSize/scale, points.slice(0)));
+    
+    // clear out the points array and startover
+    points.length = 0;
+    
+    
+};
+
+// not supported in IE
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign#Polyfill
+if (typeof Object.assign !== 'function') {
+    (function () {
+        Object.assign = this.Function("target", "'use strict';if (target === undefined || target === null) {throw new TypeError('Cannot convert undefined or null to object');}var output = Object(target);for (var index = 1; index < arguments.length; index++) {var source = arguments[index];if (source !== undefined && source !== null) {for (var nextKey in source) {if (source.hasOwnProperty(nextKey)) {output[nextKey] = source[nextKey];}}}}return output;");
+    })();
+}
+
+function extend(child, parent){
+    child.prototype = Object.create(parent.prototype);
+    
+    Object.defineProperties(child.prototype, {
+        constructor: {enumerable: false, value: child},
+        _super_: {enumerable: false, value: parent},
+    });
+    
+    Object.assign(child, parent);
+};
+
+function Point(x, y){
+    this._super_.call(this, x, y);
+    
+    points.push(this);
+};
+
+extend(Point, PVector);
+
+Point.prototype.toString = function(){
+    return "{x:" + this.x + ",y:" + this.y + "}";
+};
+
+// Button class {
+
+function Button(options){
+    Object.assign(this, Button.prototype.defaults, options);
+    //this.onMouseMove = move;
+    //this.onMouseEnter = enter;
+    //this.onMouseLeave = leave;
+    //this.onMousePress = press;
+    //this.onMouseClick = click;
+    //this.onMouseRelease = release;
+    //this.onDraw = draw;
+    uiControls.push(this);
+};
+
+Object.defineProperty(Button.prototype, "defaults", {
+    enumerable: false,
+    writable: false,
+    value: {
+        x: 0, y: 0,
+        width: 50,
+        height: 16,
+        stroke: 0xff7f7f7f,
+        fill: 0xfff0f0f0,
+        strokeWeight: 1,
+        radius: 4,
+        font: createFont("sans-serif", 11),
+        fontFill: 0xff404040,
+    },
+});
+
+Button.prototype.mouseMoved = function(x, y){
+    var wasOver = this.mouseIsOver;
+    if(
+        x >= this.x && x < this.x + this.width + this.strokeWeight &&
+        y >= this.y && y < this.y + this.height + this.strokeWeight
+    ){
+        this.mouseIsOver = true;
+    }else{
+        this.mouseIsOver = false;
+    }
+    
+    if(this.mouseIsOver){
+        if(!wasOver && this.onMouseEnter){
+            this.onMouseEnter();
+        }
+        if(this.onMouseMove){
+            this.onMouseMove();
+        }
+    }else{
+        if(this.mouseIsPressed && this.onMouseMove){
+            this.onMouseMove();
+        }
+        if(wasOver){
+            if(this.onMouseLeave){
+                this.onMouseLeave();
+            }
+        }
+    }
+};
+
+Button.prototype.mousePressed = function(){
+    if(this.mouseIsOver){
+        this.mouseIsPressed = true;
+        if(this.onMousePress){
+            this.onMousePress();
+        }
+    }
+};
+
+Button.prototype.mouseReleased = function(x, y){
+    var wasPressed = this.mouseIsPressed;
+    this.mouseIsPressed = false;
+    if(this.mouseIsOver && wasPressed){
+        if(this.onMouseClick){
+                this.onMouseClick();
+        }
+    }
+    
+    if(this.onMouseRelease){
+        this.onMouseRelease();
+    }
+};
+
+Button.prototype.draw = function() {
+    pushStyle();
+        stroke(this.stroke);
+        fill(this.fill);
+        strokeWeight(this.strokeWeight);
+        rect(this.x, this.y, this.width, this.height, this.radius);
+        if(this.text){
+            textAlign(CENTER, CENTER);
+            fill(this.fontFill);
+            textFont(this.font, this.font.size);
+            text(this.text, this.x + 0.5 * (this.width + this.strokeWeight), this.y + 0.5 * (this.height + this.strokeWeight));
+        }
+        if(this.onDraw){
+            this.onDraw();
+        }
+    popStyle();
+};//
+
+// end Button class }
+
+// DragHandle class {
+
+function DragHandle(options, posObj){
+    this._super_.call(this);
+    
+    Object.assign(this, DragHandle.prototype.defaults, options);
+    
+    this.posObj = posObj || new Point(0, 0);
+    // uses width parameter for diameter
+    this.height = this.width;
+    
+    var x = posObj.x, y = posObj.y;
+    
+    Object.defineProperties(this, {
+        x: {
+            get: function(){return x;},
+            set: function(v){x = v;}
+        },
+        y: {
+            get: function(){return y;},
+            set: function(v){y = v;},
+        }
+    });
+    
+    Object.defineProperties(posObj, {
+        x: {
+            get: function(){return x;},
+            set: function(v){x = v;}
+        },
+        y: {
+            get: function(){return y;},
+            set: function(v){y = v;},
+        }
+    });
+};
+
+extend(DragHandle, Button);
+
+Object.defineProperty(DragHandle.prototype, "defaults", {
+    enumerable: false,
+    writable: false,
+    value: {
+        width: 10,
+        height: 10,
+        stroke: 0x60000000,
+        fill: 0x60a0a0a0,
+    }
+});
+
+DragHandle.prototype.mouseMoved = function(x, y){
+    var dx = x - this.x, dy = y - this.y, r2 = 0.25 * (this.width * this.width);
+    
+    if(dx * dx + dy * dy < r2){
+        this.mouseIsOver = true;
+        this.dx = dx;
+        this.dy = dy;
+    }else{
+        this.mouseIsOver = false;
+    }
+    
+    if(this.grabbed){
+        this.x = x - this.dx;
+        this.y = y - this.dy;
+    }
+};
+
+DragHandle.prototype.mousePressed = function(){
+    if(this.mouseIsOver){
+        this.grabbed = true;
+    }
+};
+
+DragHandle.prototype.mouseReleased = function(){
+    this.grabbed = false;
+};
+
+DragHandle.prototype.draw = function() {
+    var s = this.stroke, f = this.fill;
+    
+    pushStyle();
+        if(s){
+            stroke(s);
+            strokeWeight(this.strokeWeight);
+        }else{
+            noStroke();
+        }
+        
+        if(f){
+            fill(f);
+        }else{
+            noFill();
+        }
+        
+        ellipse(this.x, this.y, this.width, this.width);
+    popStyle();
+};
+
+// end DragHandle class }
+				}
+			}
+
+			//alert("test");
+			new Processing(document.getElementById("output-canvas"), sketch);
+		</script>
+	</body>
+</html>
